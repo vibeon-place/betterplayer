@@ -765,10 +765,15 @@ class BetterPlayer(
         if (isInitialized) {
             exoPlayer?.stop()
         }
-        // The producer owns its surface: releasing the producer releases it.
-        textureEntry.release()
+        // Detach the surface first — ExoPlayer blocks until its video renderer no
+        // longer touches it — then release the player, and only then the producer,
+        // which owns the surface (an ImageReader) and closes it. Releasing the
+        // producer while the decoder still queues frames floods the log with
+        // "BufferQueue has been abandoned".
+        exoPlayer?.setVideoSurface(null)
         surface = null
         exoPlayer?.release()
+        textureEntry.release()
     }
 
     override fun equals(other: Any?): Boolean {
