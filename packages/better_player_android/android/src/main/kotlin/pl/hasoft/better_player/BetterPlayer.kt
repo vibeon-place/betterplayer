@@ -51,7 +51,7 @@ import androidx.work.WorkManager
 import pl.hasoft.better_player.DataSourceUtils.getDataSourceFactory
 import pl.hasoft.better_player.DataSourceUtils.getUserAgent
 import pl.hasoft.better_player.DataSourceUtils.isHTTP
-import io.flutter.view.TextureRegistry.SurfaceTextureEntry
+import io.flutter.view.TextureRegistry.SurfaceProducer
 import java.io.File
 import java.util.*
 import kotlin.math.max
@@ -63,7 +63,7 @@ import androidx.annotation.Keep
 @UnstableApi
 class BetterPlayer(
     context: Context,
-    val textureEntry: SurfaceTextureEntry,
+    val textureEntry: SurfaceProducer,
     val callback: BetterPlayerCallback,
     customDefaultLoadControl: CustomDefaultLoadControl? = null,
 ) {
@@ -83,6 +83,16 @@ class BetterPlayer(
     private var isInitialized = false
     private var isInitializedSent = false
     private var surface: Surface? = null
+
+    /**
+     * Degrees the Flutter side must turn the texture by to show the video upright
+     * (0, 90, 180 or 270). A surface produced by the engine's ImageReader path (the
+     * SurfaceProducer on Impeller) carries no buffer transform, so the container's
+     * rotation metadata has to be applied by the widget; a SurfaceTexture-backed
+     * producer applies it itself and reports 0 here.
+     */
+    @Volatile
+    private var rotationCorrectionDegrees: Int = 0
     private var key: String? = null
     private var playerNotificationManager: PlayerNotificationManager? = null
     private var bitmap: Bitmap? = null
@@ -115,6 +125,11 @@ class BetterPlayer(
     @Keep
     fun getTextureId(): Long {
         return textureEntry.id()
+    }
+
+    @Keep
+    fun getRotationCorrection(): Int {
+        return rotationCorrectionDegrees
     }
 
     @Keep
@@ -422,8 +437,22 @@ class BetterPlayer(
         }
     }
 
-    private fun setupVideoPlayer(textureEntry: SurfaceTextureEntry) {
-        surface = Surface(textureEntry.surfaceTexture())
+    private fun setupVideoPlayer(textureEntry: SurfaceProducer) {
+        // Flutter's SurfaceProducer API (Flutter 3.24+, the recommended way to render
+        // on Impeller): the engine owns the surface and may clean it up while the app
+        // is in the background; re-attach the player when it becomes available again.
+        textureEntry.setCallback(object : SurfaceProducer.Callback {
+            override fun onSurfaceAvailable() {
+                surface = textureEntry.surface
+                exoPlayer?.setVideoSurface(surface)
+            }
+
+            override fun onSurfaceCleanup() {
+                exoPlayer?.setVideoSurface(null)
+                surface = null
+            }
+        })
+        surface = textureEntry.surface
         exoPlayer?.setVideoSurface(surface)
         setAudioAttributes(exoPlayer, true)
         exoPlayer?.addListener(object : Player.Listener {
@@ -598,6 +627,12 @@ class BetterPlayer(
                     height = videoSize.width
                 }
             }
+            rotationCorrectionDegrees = if (textureEntry.handlesCropAndRotation()) 0 else {
+                when (val degrees = exoPlayer?.videoFormat?.rotationDegrees ?: 0) {
+                    90, 180, 270 -> degrees
+                    else -> 0
+                }
+            }
             callback.onInitialized(durationMs = duration, width = width, height = height, key = key)
         }
     }
@@ -730,9 +765,9 @@ class BetterPlayer(
         if (isInitialized) {
             exoPlayer?.stop()
         }
+        // The producer owns its surface: releasing the producer releases it.
         textureEntry.release()
-        
-        surface?.release()
+        surface = null
         exoPlayer?.release()
     }
 

@@ -1,3 +1,13 @@
+## 1.6.1+vibeon.1 (fork vibeon-place/betterplayer, branch vibeon/surface-producer)
+
+* Android: render through Flutter's `SurfaceProducer` API instead of the legacy `SurfaceTexture`
+  entry (Flutter >= 3.24, the API Flutter recommends for Impeller). On Impeller's Vulkan backend the
+  legacy path copied every video texture from OpenGL to Vulkan on each frame with two synchronous GPU
+  waits (about 3 ms per visible video per frame on a Galaxy A56).
+* Android: `getRotationCorrection()` and a rotated texture in `buildView` when the engine's surface
+  producer does not apply the container's rotation (ImageReader-backed surfaces), mirroring
+  `video_player_android`.
+
 ## 1.6.1
 - Fixed: Resolved Android media notification tap intent via `packageManager.getLaunchIntentForPackage` by default and supported fully qualified `activityName` values (#1138).
 - Fixed: Supported `file://` URIs and proper bitmap bounds sampling when loading local notification images in `ImageWorker` (#883).

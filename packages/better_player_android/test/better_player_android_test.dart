@@ -73,10 +73,26 @@ void main() {
       expect(BetterPlayerPlatform.instance, isA<BetterPlayerAndroid>());
     });
 
-    test('buildView returns Texture widget', () {
-      final widget = androidPlayer.buildView(1);
-      expect(widget, isA<Texture>());
-      expect((widget as Texture).textureId, 1);
+    testWidgets('buildView shows the texture upright by default', (tester) async {
+      await tester.pumpWidget(androidPlayer.buildView(1));
+      final texture = tester.widget<Texture>(find.byType(Texture));
+      expect(texture.textureId, 1);
+      expect(find.byType(RotatedBox), findsNothing);
+    });
+
+    testWidgets('buildView turns the texture by the reported rotation', (
+      tester,
+    ) async {
+      await tester.pumpWidget(androidPlayer.buildView(1));
+      androidPlayer.setRotationCorrectionForTesting(1, 90);
+      await tester.pump();
+      final rotated = tester.widget<RotatedBox>(find.byType(RotatedBox));
+      expect(rotated.quarterTurns, 1);
+      expect(find.byType(Texture), findsOneWidget);
+
+      androidPlayer.setRotationCorrectionForTesting(1, 0);
+      await tester.pump();
+      expect(find.byType(RotatedBox), findsNothing);
     });
 
     test('dispose calls native dispose and release', () async {

@@ -45,6 +45,20 @@ class BetterPlayerAndroid extends BetterPlayerPlatform {
   final Map<int, StreamController<VideoEvent>> _eventControllers = {};
   final Map<int, dynamic> _callbacks = {};
 
+  /// Degrees each player's texture must be turned by to show the video upright
+  /// (0, 90, 180 or 270) — see [buildView].
+  final Map<int, ValueNotifier<int>> _rotationCorrections = {};
+
+  ValueNotifier<int> _rotationCorrectionFor(int textureId) =>
+      _rotationCorrections.putIfAbsent(textureId, () => ValueNotifier<int>(0));
+
+  /// Sets the rotation [buildView] applies for [textureId] (tests only; at
+  /// runtime the native player reports it when the video is initialized).
+  @visibleForTesting
+  void setRotationCorrectionForTesting(int textureId, int degrees) {
+    _rotationCorrectionFor(textureId).value = degrees;
+  }
+
   @override
   Future<void> dispose(int? textureId) async {
     if (textureId == null) return;
@@ -55,6 +69,7 @@ class BetterPlayerAndroid extends BetterPlayerPlatform {
     _players[textureId]?.dispose();
     _players[textureId]?.release();
     _players.remove(textureId);
+    _rotationCorrections.remove(textureId)?.dispose();
 
     try {
       _callbacks[textureId]?.release();
@@ -70,10 +85,17 @@ class BetterPlayerAndroid extends BetterPlayerPlatform {
     BufferingConfiguration? bufferingConfiguration,
   }) async {
     final tempController = StreamController<VideoEvent>.broadcast();
+    int? createdTextureId;
 
     final callback = buildCallback(
       $BetterPlayerCallback(
         onInitialized: (int durationMs, int width, int height, JString? key) {
+          final id = createdTextureId;
+          final created = id == null ? null : _players[id];
+          if (id != null && created is NativeBetterPlayerWrapper) {
+            _rotationCorrectionFor(id).value =
+                created.internalPlayer.rotationCorrection;
+          }
           tempController.add(
             VideoEvent(
               eventType: VideoEventType.initialized,
@@ -185,6 +207,7 @@ class BetterPlayerAndroid extends BetterPlayerPlatform {
     }
 
     final textureId = getTextureIdFromPlayer(player);
+    createdTextureId = textureId;
     _players[textureId] = createWrapper(player);
     _callbacks[textureId] = callback;
     _eventControllers[textureId] = tempController;
@@ -371,7 +394,18 @@ class BetterPlayerAndroid extends BetterPlayerPlatform {
 
   @override
   Widget buildView(int? textureId) {
-    return Texture(textureId: textureId!);
+    // The video renders through a surface the engine produces (SurfaceProducer).
+    // When that surface is ImageReader-backed (Impeller) the frames arrive without
+    // the container's rotation applied, so the texture is turned here — the same
+    // correction video_player_android applies.
+    final texture = Texture(textureId: textureId!);
+    return ValueListenableBuilder<int>(
+      valueListenable: _rotationCorrectionFor(textureId),
+      child: texture,
+      builder: (_, degrees, child) => degrees == 0
+          ? child!
+          : RotatedBox(quarterTurns: degrees ~/ 90, child: child),
+    );
   }
 
   @visibleForTesting

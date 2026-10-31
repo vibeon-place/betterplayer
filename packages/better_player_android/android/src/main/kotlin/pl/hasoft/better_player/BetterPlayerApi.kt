@@ -29,7 +29,7 @@ class BetterPlayerApi {
         
         @Keep
         fun createPlayer(context: Context, callback: BetterPlayerCallback): BetterPlayer? {
-            val texture = textureRegistry?.createSurfaceTexture() ?: return null
+            val texture = textureRegistry?.createSurfaceProducer() ?: return null
             return BetterPlayer(context, texture, callback)
         }
     }

@@ -1897,6 +1897,36 @@ extension BetterPlayer$$Methods on BetterPlayer {
     return _get$textureId(_$$selfRef.pointer, _id_get$textureId.pointer).long;
   }
 
+  static final _id_get$rotationCorrection = BetterPlayer._class.instanceMethodId(
+    r'getRotationCorrection',
+    r'()I',
+  );
+
+  static final _get$rotationCorrection =
+      jni$_.ProtectedJniExtensions.lookup<
+            jni$_.NativeFunction<
+              jni$_.JniResult Function(
+                jni$_.Pointer<jni$_.Void>,
+                jni$_.JMethodIDPtr,
+              )
+            >
+          >('globalEnv_CallIntMethod')
+          .asFunction<
+            jni$_.JniResult Function(
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.JMethodIDPtr,
+            )
+          >();
+
+  /// from: `public fun getRotationCorrection(): kotlin.Int`
+  core$_.int get rotationCorrection {
+    final _$$selfRef = reference;
+    return _get$rotationCorrection(
+      _$$selfRef.pointer,
+      _id_get$rotationCorrection.pointer,
+    ).integer;
+  }
+
   static final _id_set$matchFrameRate = BetterPlayer._class.instanceMethodId(
     r'setMatchFrameRate',
     r'(Z)V',
